@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Synthèse des avis par plateforme</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #fff; --ink: #1d2433; --muted: #5d6679; --line: #e2e6ee;
+    --accent: #2f5bea; --accent-ink: #fff; --good: #1d7a4d; --bad: #b4412c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #11151d; --card: #1a2030; --ink: #e8ecf5; --muted: #9aa5bd; --line: #2a3246; --accent: #6b8cff; --accent-ink: #0b1020; --good: #5fd39b; --bad: #ff8d77; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--ink); }
+  main { max-width: 960px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 1.6rem; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 20px; }
+  .panel { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: grid; gap: 12px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  label { font-size: .85rem; color: var(--muted); display: grid; gap: 4px; flex: 1 1 260px; }
+  input { font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); }
+  button { font: inherit; padding: 9px 16px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--ink); cursor: pointer; }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+  button:disabled { opacity: .6; cursor: wait; }
+  #status { margin: 16px 0; color: var(--muted); }
+  #status.error { color: var(--bad); }
+  .platform { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px; margin: 16px 0; }
+  .platform h2 { margin: 0; font-size: 1.25rem; }
+  .meta { color: var(--muted); font-size: .85rem; margin: 2px 0 10px; }
+  .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin: 12px 0; }
+  .cols h3 { margin: 0 0 4px; font-size: .95rem; }
+  .cols .good h3 { color: var(--good); } .cols .bad h3 { color: var(--bad); }
+  ul { margin: 0; padding-left: 20px; }
+  details { border-top: 1px solid var(--line); padding: 8px 0; }
+  summary { cursor: pointer; font-weight: 600; }
+  details p { margin: 6px 0; }
+  .div { color: var(--muted); font-size: .92rem; }
+  .badge { font-size: .75rem; padding: 2px 8px; border-radius: 99px; background: var(--line); color: var(--muted); margin-left: 6px; }
+  .err { color: var(--bad); }
+  @media print { .panel, #status { display: none; } body { background: #fff; color: #000; } .platform { break-inside: avoid; } details { display: block; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Synthèse des avis par plateforme</h1>
+  <p class="sub">Les réponses du formulaire sont regroupées par plateforme puis synthétisées par Claude, critère par critère.</p>
+
+  <section class="panel">
+    <div class="row">
+      <label>Adresse de l'application web (Apps Script)
+        <input id="url" type="url" placeholder="https://script.google.com/macros/s/.../exec" autocomplete="off">
+      </label>
+      <label>Code d'accès
+        <input id="code" type="password" autocomplete="off">
+      </label>
+    </div>
+    <div class="row">
+      <button id="run" class="primary">Actualiser les synthèses</button>
+      <button id="force" title="Ignore le cache et relance l'analyse même si les réponses n'ont pas changé">Forcer une nouvelle analyse</button>
+      <button id="demo">Voir un exemple (données fictives)</button>
+      <button id="print">Imprimer / PDF</button>
+    </div>
+  </section>
+
+  <p id="status" role="status"></p>
+  <div id="results"></div>
+</main>
+
+<script>
+"use strict";
+
+// Vous pouvez renseigner ici l'adresse de l'application web pour ne plus avoir à la saisir.
+var DEFAULT_APPS_SCRIPT_URL = "";
+
+var DEMO = {
+  ok: true, generatedAt: new Date().toISOString(), totalResponses: 7,
+  platforms: [
+    {
+      name: "Plateforme exemple A", respondents: 4,
+      summary: "Les participants apprécient la prise en main rapide et la clarté de la création de badges. Les retours sont plus réservés sur les intégrations et sur la gestion des aspects réglementaires. Avec quatre répondants, les conclusions restent indicatives.",
+      strengths: ["Création et paramétrage des badges jugés simples", "Bonne valorisation et partage des badges"],
+      weaknesses: ["Connexion à l'écosystème numérique limitée", "Peu de clarté sur les certifications réglementées"],
+      criteria: [
+        { label: "Définir, concevoir et paramétrer les badges", synthesis: "L'éditeur de badges est jugé intuitif, avec des modèles utiles pour démarrer.", keyPoints: ["Interface intuitive", "Modèles de badges appréciés"], divergences: "Un répondant regrette le peu d'options de personnalisation graphique." },
+        { label: "Connecter la plateforme à son écosystème numérique", synthesis: "Les intégrations existent mais demandent un travail technique.", keyPoints: ["API disponible mais peu documentée"], divergences: "" }
+      ]
+    },
+    {
+      name: "Plateforme exemple B", respondents: 3,
+      summary: "Plateforme perçue comme robuste sur la gestion des utilisateurs et la mesure d'impact, mais jugée plus complexe à prendre en main.",
+      strengths: ["Gestion fine des utilisateurs et des espaces de travail", "Tableaux de bord d'impact"],
+      weaknesses: ["Prise en main longue", "Parcours de progression peu lisible"],
+      criteria: [
+        { label: "Mesurer l'utilisation et l'impact des badges", synthesis: "Les statistiques sont complètes et exportables.", keyPoints: ["Tableaux de bord clairs", "Export des données"], divergences: "" },
+        { label: "Organiser une progression à travers plusieurs badges", synthesis: "La notion de parcours existe mais reste difficile à configurer.", keyPoints: ["Configuration peu intuitive"], divergences: "Un participant la juge au contraire très flexible." }
+      ]
+    }
+  ]
+};
+
+var $ = function (id) { return document.getElementById(id); };
+var statusEl = $("status"), resultsEl = $("results");
+
+$("url").value = localStorage.getItem("appsScriptUrl") || DEFAULT_APPS_SCRIPT_URL;
+$("code").value = sessionStorage.getItem("accessCode") || "";
+
+function setStatus(msg, isError) {
+  statusEl.textContent = msg || "";
+  statusEl.className = isError ? "error" : "";
+}
+
+function el(tag, text, cls) {
+  var n = document.createElement(tag);
+  if (text != null) n.textContent = text;
+  if (cls) n.className = cls;
+  return n;
+}
+
+function list(items) {
+  var ul = el("ul");
+  (items || []).forEach(function (t) { ul.appendChild(el("li", t)); });
+  return ul;
+}
+
+function render(data) {
+  resultsEl.textContent = "";
+  if (!data.platforms || data.platforms.length === 0) {
+    setStatus("Aucune réponse à synthétiser pour le moment.");
+    return;
+  }
+  data.platforms.forEach(function (p) {
+    var card = el("article", null, "platform");
+    var h = el("h2", p.name);
+    card.appendChild(h);
+    card.appendChild(el("div", p.respondents + " répondant" + (p.respondents > 1 ? "s" : ""), "meta"));
+
+    if (p.error) { card.appendChild(el("p", p.error, "err")); resultsEl.appendChild(card); return; }
+
+    card.appendChild(el("p", p.summary));
+
+    var cols = el("div", null, "cols");
+    var good = el("div", null, "good"); good.appendChild(el("h3", "Points forts")); good.appendChild(list(p.strengths));
+    var bad = el("div", null, "bad"); bad.appendChild(el("h3", "Points faibles")); bad.appendChild(list(p.weaknesses));
+    cols.appendChild(good); cols.appendChild(bad);
+    card.appendChild(cols);
+
+    (p.criteria || []).forEach(function (c) {
+      var d = el("details");
+      d.appendChild(el("summary", c.label));
+      d.appendChild(el("p", c.synthesis));
+      if (c.keyPoints && c.keyPoints.length) d.appendChild(list(c.keyPoints));
+      if (c.divergences) d.appendChild(el("p", "Avis divergents : " + c.divergences, "div"));
+      card.appendChild(d);
+    });
+    resultsEl.appendChild(card);
+  });
+  var when = new Date(data.generatedAt).toLocaleString("fr-FR");
+  setStatus(data.totalResponses + " réponse(s) analysée(s), synthèse du " + when + (data.fromCache ? " (réponses inchangées, résultat conservé)" : "") + ".");
+}
+
+async function run(force) {
+  var url = $("url").value.trim(), code = $("code").value;
+  if (!url) { setStatus("Renseignez l'adresse de l'application web.", true); return; }
+  if (!code) { setStatus("Renseignez le code d'accès.", true); return; }
+  localStorage.setItem("appsScriptUrl", url);
+  sessionStorage.setItem("accessCode", code);
+
+  var buttons = [$("run"), $("force")];
+  buttons.forEach(function (b) { b.disabled = true; });
+  setStatus("Analyse en cours, cela peut prendre une minute...");
+  try {
+    // text/plain évite la requête de pré-vérification CORS, que Apps Script ne gère pas.
+    var resp = await fetch(url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ code: code, force: !!force }) });
+    var data = await resp.json();
+    if (!data.ok) throw new Error(data.error || "Erreur inconnue");
+    render(data);
+  } catch (err) {
+    setStatus("Échec : " + err.message, true);
+  } finally {
+    buttons.forEach(function (b) { b.disabled = false; });
+  }
+}
+
+$("run").addEventListener("click", function () { run(false); });
+$("force").addEventListener("click", function () { run(true); });
+$("demo").addEventListener("click", function () { DEMO.generatedAt = new Date().toISOString(); render(DEMO); });
+$("print").addEventListener("click", function () {
+  document.querySelectorAll("details").forEach(function (d) { d.open = true; });
+  window.print();
+});
+</script>
+</body>
+</html>
